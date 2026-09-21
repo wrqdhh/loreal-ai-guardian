@@ -1,0 +1,14 @@
+# 自检与调试产物
+_selftest-out.txt
+_dom.html
+_*.txt
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 依赖与构建产物（本项目当前无依赖，为后续扩展预留）
+node_modules/
+dist/
