@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>评测 · 内容核验 Agent</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --line:#e4e7ec; --text:#1f2328;
+    --muted:#6b7280; --accent:#2f6feb; --ok:#1a7f45; --bad:#c0392b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px 24px 60px;background:var(--bg);color:var(--text);
+       font:14px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 6px}
+  .sub{color:var(--muted);margin-bottom:20px}
+  .bar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+  button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 16px;
+         font-size:14px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  button.ghost{background:#fff;color:var(--text);border:1px solid var(--line)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin:18px 0 24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{color:var(--muted);font-size:12px}
+  .card .v{font-size:24px;font-weight:600;margin:4px 0 2px}
+  .card .s{color:var(--muted);font-size:12px;line-height:1.5}
+  h3{font-size:15px;margin:26px 0 8px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);
+        border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13px}
+  th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line)}
+  th{background:#f0f2f5;font-weight:600;color:#444}
+  tr:last-child td{border-bottom:0}
+  tr.bad td{background:#fdf3f2}
+  tr.ok td{background:#fff}
+  td.sig{color:var(--muted);font-size:12px;max-width:420px;word-break:break-all}
+  #log{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+       padding:12px 14px;color:var(--muted);font-size:12.5px;max-height:180px;overflow:auto;
+       white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace}
+  .note{background:#fff8e6;border:1px solid #f2e0b0;border-radius:8px;padding:12px 14px;
+        color:#7a5c10;font-size:13px;margin-bottom:18px}
+  .err{background:#fdf3f2;border:1px solid #f2c4be;color:#9c2b1f;padding:12px 14px;
+       border-radius:8px;font-size:13px;margin-bottom:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>评测 · 内容核验 Agent</h1>
+  <div class="sub">用 <code>dataset/</code> 下的测试数据，量化 Agent 的判定能力与定位能力</div>
+
+  <div id="env" class="note" hidden></div>
+
+  <div class="bar">
+    <button id="btnRun">开始评测</button>
+    <button id="btnExport" class="ghost" disabled>导出 JSON 报告</button>
+    <span id="status" style="color:var(--muted);font-size:13px"></span>
+  </div>
+
+  <div id="log" hidden></div>
+  <div id="report"></div>
+</div>
+
+<script src="engine.js"></script>
+<script src="agent.js"></script>
+<script src="benchmark.js"></script>
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var last = null;
+
+  // file:// 下 fetch 会被浏览器拦截，必须走 http
+  if (location.protocol === 'file:') {
+    var e = $('env');
+    e.hidden = false;
+    e.className = 'err';
+    e.textContent = '当前是 file:// 协议，浏览器会阻止读取 dataset/。请在项目目录启动本地服务后访问：'
+      + ' python -m http.server 8000 ，然后打开 http://127.0.0.1:8000/benchmark.html';
+    $('btnRun').disabled = true;
+    return;
+  }
+
+  $('btnRun').onclick = async function(){
+    var btn = this, log = $('log');
+    btn.disabled = true;
+    log.hidden = false;
+    log.textContent = '';
+    $('status').textContent = '评测中…';
+    var t0 = performance.now();
+    try {
+      last = await window.Benchmark.run({ onLog: function(m){
+        log.textContent += m + '\n';
+        log.scrollTop = log.scrollHeight;
+      }});
+      window.Benchmark.render(last);
+      if (last.dataset.synthetic) {
+        var e2 = $('env');
+        e2.hidden = false;
+        e2.textContent = '注意：当前数据集由程序化素材生成（synthetic=true），数字只反映工具链是否跑通，'
+          + '不代表真实检测能力。请按 dataset/README.md 准备真实素材后重跑。';
+      } else if (last.dataset.skippedSynthetic) {
+        $('env').hidden = true;
+      }
+      $('status').textContent = '完成 · 用时 ' + Math.round(performance.now()-t0) + ' ms · 样本 ' + last.dataset.evaluated + ' 个';
+      $('btnExport').disabled = false;
+    } catch(err){
+      $('status').textContent = '出错：' + err.message;
+      log.textContent += '\nERROR ' + err.message;
+    }
+    btn.disabled = false;
+  };
+
+  $('btnExport').onclick = function(){
+    if (!last) return;
+    var blob = new Blob([JSON.stringify(last, null, 2)], {type:'application/json'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'benchmark-report.json';
+    a.click();
+  };
+
+  if (location.hash.indexOf('benchmark') >= 0) setTimeout(window.Benchmark.auto, 60);
+})();
+</script>
+</body>
+</html>

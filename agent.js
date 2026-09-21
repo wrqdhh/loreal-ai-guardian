@@ -147,7 +147,8 @@
         ms: 0
       };
       emit(rec);
-      await new Promise(function (r) { setTimeout(r, def.pace || 160); });   // 让轨迹可见，便于演示与录屏
+      // pace 用于演示/录屏时让轨迹可见；批量评测（input.fast）时跳过等待
+      await new Promise(function (r) { setTimeout(r, input && input.fast ? 0 : (def.pace || 160)); });
       var st = performance.now();
       var res = await exec();
       rec.ms = Math.round(performance.now() - st + (def.cost || 0));

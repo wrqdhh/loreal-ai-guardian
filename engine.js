@@ -505,9 +505,9 @@
 
   /* ---------------- 3. 文本核验 ---------------- */
   var LEX = {
-    absolute: /(?:最(?:好|佳|强|美|棒|新|高|大|低|快|专业|厉害|懂|值得|有效)|第一|No\.?1|顶级|极致|唯一|独家|绝对|100\s*%|永久|彻底|根治|史上|无敌|首选|天花板|封神|全网最低|秒杀一切)/g,
-    medical: /(?:治疗|消炎|杀菌|抗菌|抑菌|抗炎|药用|处方|修复(?:受损)?细胞|祛斑|祛痘根|医美|整形|美白针|排毒|免疫调节|生发|除螨)/g,
-    fakePromise: /(?:\d+\s*(?:天|周|日|次|小时)(?:见效|美白|祛痘|淡纹|变白|焕肤)|立即见效|立刻见效|马上见效|无效退款|包治|秒变|一夜)/g,
+    absolute: /(?:最(?:好|佳|强|美|棒|新|高|大|低|快|专业|厉害|懂|值得|有效)|第一|No\.?1|顶级|极致|唯一|独家|绝对|100\s*%|永久|彻底|根治|史上|无敌|首选|天花板|封神|全网最低|秒杀一切|革命性|颠覆(?:性)?|突破性|所有肤质|任何肤质|所有人群|万能|瞬间|即刻|永不)/g,
+    medical: /(?:治疗|消炎|杀菌|抗菌|抑菌|抗炎|药用|处方|(?:修复|修护)(?:受损)?细胞|肌底|年轻化|淡化?细纹|淡纹|肌肤屏障|屏障功能|细胞再生|激活细胞|再生|祛斑|祛痘根|医美|整形|美白针|排毒|免疫调节|生发|除螨)/g,
+    fakePromise: /(?:\d+\s*(?:天|周|日|次|小时)(?:见效|美白|祛痘|淡纹|变白|焕肤)|立即见效|立刻见效|马上见效|无效退款|包治|秒变|一夜|有效改善|有效淡化|有效祛|不脱妆|不暗沉|24\s*小时|全天候|显著)/g,
     shill: /(?:绝绝子|yyds|YYDS|闭眼入|无限回购|吹爆|封神|谁懂啊|救命|太绝了|绝了|无敌了|爱了爱了|回购一万年|没有之一|按头安利|血泪推荐)/g,
     connector: /(?:首先|其次|再者|然后|此外|与此同时|不仅如此|值得一提的是|需要注意的是|综上所述|总而言之|总的来说|因此|从而|第一\s*[、,，]|第二\s*[、,，]|第三\s*[、,，])/g,
     personal: /(?:我(?!们)|我自己|上周|上周[一二三四五六日]|昨天|前天|当时|结果|居然|本来|说实话|讲真|个人觉得|自用|空瓶|踩雷|回购了)/g,
@@ -607,6 +607,16 @@
     LEX.fakePromise.lastIndex = 0;
     while ((m = LEX.fakePromise.exec(all)) !== null) fp.push({ w: m[0], i: m.index });
 
+    // 否定语境不算违规：「淡纹？没看出来」「并不是最好的」是真人表达怀疑，不是宣称功效
+    function negated(i, wlen) {
+      var after = all.substr(i + wlen, 4);
+      var before = all.substr(Math.max(0, i - 2), 2);
+      return /^[?？!！。、,，\s]*(没|不|无|未|别)/.test(after) || /(没|不|无|未)$/.test(before);
+    }
+    abs = abs.filter(function (x) { return !negated(x.i, x.w.length); });
+    med = med.filter(function (x) { return !negated(x.i, x.w.length); });
+    fp = fp.filter(function (x) { return !negated(x.i, x.w.length); });
+
     abs.slice(0, 12).forEach(function (x) { marks.push({ start: x.i, end: x.i + x.w.length, type: 'absolute', label: '绝对化用语' }); });
     med.slice(0, 12).forEach(function (x) { marks.push({ start: x.i, end: x.i + x.w.length, type: 'medical', label: '医疗/功效宣称' }); });
     fp.slice(0, 12).forEach(function (x) { marks.push({ start: x.i, end: x.i + x.w.length, type: 'promise', label: '效果承诺' }); });
@@ -640,14 +650,48 @@
         }
         dupRate = dup / cmtLines.length;
       }
-      var shillScore = U.clamp(shillHits / Math.max(2, cmtLines.length) * 1.6 + emojiDensity * 0.35 + dupRate * 1.2, 0, 1);
-      if (shillScore > 0.35) {
+
+      // 组织化刷评最稳定的三个特征，比「夸赞词」更本质：
+      //   ① 评论普遍极短（没有内容可写）② 没人提问（不是真实互动）③ 没有任何负面或犹豫
+      // 真实评论区一定长短不一，且一定会有人问色号、问渠道、说不适合自己。
+      var ASK = /[?？吗呢]|怎么|如何|求|哪个|多少|是不是|会不会|能不能|能不能|值不值/;
+      var NEG = /(?:不过|但是|可是|然而|有点|稍微|可能|也许|感觉|不太|并没有|因人而异|介意|缺点|不足|不适合|不推荐|慎入|劝退|翻车|闷痘|过敏|闭口|踩雷|难用|失望|退货|亏|贵)/;
+      var shortN = 0, askN = 0, negN = 0;
+      for (var li = 0; li < cmtLines.length; li++) {
+        var line = cmtLines[li];
+        if (line.replace(/\s/g, '').length <= 10) shortN++;
+        if (ASK.test(line)) askN++;
+        if (NEG.test(line)) negN++;
+      }
+      var n = cmtLines.length || 1;
+      var shortRate = shortN / n, askRate = askN / n, negRate = negN / n;
+
+      // 人类证据抵扣：真人评论常带具体信息（价格、色号、肤质、渠道、时间），
+      // 刷评写不出这些 —— 与文体检测里「不确定性与负面表述」同一思路。
+      var DETAIL = /(?:价格|多少钱|同款|色号|油皮|干皮|混干|混油|敏感肌|痘|闭口|柜台|旗舰店|旗舰|快递|退换|退货|毫升|ml|ML|上周|昨天|用了|回购了|第[一二三四五三]次|对比)/;
+      var detailN = 0;
+      for (var di2 = 0; di2 < cmtLines.length; di2++) if (DETAIL.test(cmtLines[di2])) detailN++;
+      var detailRate = detailN / n;
+
+      var shillScore = U.clamp(
+        shillHits / Math.max(2, cmtLines.length) * 1.2 +
+        shortRate * 0.20 +
+        (1 - askRate) * 0.55 +
+        (1 - negRate) * 0.15 +
+        emojiDensity * 0.15 + dupRate * 0.8 - detailRate * 0.30, 0, 1);
+      // 评论条数太少时不足以判断，压低置信
+      if (cmtLines.length < 3) shillScore *= 0.75;
+
+      if (shillScore > 0.6) {
         signals.push({
           id: 'text-shill', cat: 'text', severity: U.clamp(shillScore, 0.3, 0.85), confidence: 0.62,
           label: '评论区呈现刷评/水军特征',
-          detail: '共 ' + cmtLines.length + ' 条评论：极端夸赞词 ' + shillHits + ' 处、平均每条 emoji ' + U.fmt(emojiDensity, 2) +
-            ' 个、开头 8 字重复率 ' + U.fmt(dupRate * 100, 1) + '%。真实用户评论通常长短不一并包含具体使用场景或负面反馈；' +
-            '高度统一的极端正向表达、emoji 位置模板化、句式重复，是组织化刷评的典型表现。',
+          detail: '共 ' + cmtLines.length + ' 条评论：极端夸赞词 ' + shillHits + ' 处；' +
+            '极短评论占比 ' + U.fmt(shortRate * 100, 0) + '%（≤10 字）、含提问的评论 ' + U.fmt(askRate * 100, 0) + '%、' +
+            '含负面或犹豫表述的评论 ' + U.fmt(negRate * 100, 0) + '%。' +
+            '判据重点不是「有没有夸」，而是「有没有人真的在交流」——真实评论区一定长短不一，' +
+            '且一定会有人问色号、问渠道、说不适合自己；当评论普遍极短、无人提问、无一句负面时，' +
+            '无论措辞是否雷同，都应视为组织化刷评的强信号。',
           metric: '刷评倾向 ' + U.fmt(shillScore, 2)
         });
       }
