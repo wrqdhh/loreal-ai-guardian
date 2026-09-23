@@ -104,8 +104,18 @@
       var s = man.samples[i];
       if (s.synthetic && !opts.includeSynthetic) { skippedSynthetic++; continue; }
 
-      var tc = tset.cases[i % tset.cases.length];
-      log('[' + (i + 1) + '/' + man.samples.length + '] ' + s.id + ' …');
+      // 图文配对：manifest 样本可用 text_case 显式指定配套文本。
+      // 未指定时退回循环取模——取模只保证「有文本输入」，并不代表图文语义相关；
+      // 正式评测应在 manifest 里逐条显式配对，否则图文交叉证据的评测结果不可信。
+      var pairing = 'explicit', tc = null;
+      if (s.text_case) {
+        for (var ci = 0; ci < tset.cases.length; ci++) if (tset.cases[ci].id === s.text_case) tc = tset.cases[ci];
+        if (!tc) { tc = tset.cases[i % tset.cases.length]; pairing = 'fallback'; }
+      } else {
+        tc = tset.cases[i % tset.cases.length];
+        pairing = 'roundrobin';
+      }
+      log('[' + (i + 1) + '/' + man.samples.length + '] ' + s.id + ' … 配对=' + pairing + ':' + tc.id);
 
       // manifest 里的路径相对 dataset/，URL 需要补上前缀
       var imgUrl = 'dataset/' + s.image;
@@ -129,7 +139,8 @@
         pred: predPositive ? 'suspicious' : 'authentic',
         correct: truthPositive === predPositive,
         signals: res.signals.map(function (x) { return x.id; }),
-        textCase: tc.id
+        textCase: tc.id,
+        pairing: pairing
       };
 
       // 区域级定位
@@ -306,7 +317,8 @@
       });
       rep.rows.forEach(function (r) {
         L.push('ROW ' + r.id + ' cat=' + r.category + ' truth=' + r.truth + ' pred=' + r.pred +
-          ' score=' + r.score + ' sig=[' + r.signals.join(',') + ']' + (r.iou === undefined ? '' : ' iou=' + r.iou.toFixed(3) +
+          ' score=' + r.score + ' sig=[' + r.signals.join(',') + ']' +
+          ' pairing=' + r.pairing + ':' + r.textCase + (r.iou === undefined ? '' : ' iou=' + r.iou.toFixed(3) +
             (r.cl ? ' clusters[elaLow=' + r.cl.elaLow + ' noiseLow=' + r.cl.noiseLow +
               ' elaHigh=' + r.cl.elaHigh + ' noiseHigh=' + r.cl.noiseHigh + ']' : '')) + ' ' + (r.correct ? 'OK' : 'MISS'));
       });

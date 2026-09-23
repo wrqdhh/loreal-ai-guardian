@@ -19,6 +19,20 @@ python -m http.server 8000
 
 ---
 
+## 图文配对
+
+图像样本与文本 case 的搭配方式，由 manifest 样本条目的可选字段 `text_case` 决定：
+
+| 情况 | `pairing` 标记 | 说明 |
+|---|---|---|
+| 有 `text_case` 且能匹配到 id | `explicit` | 精确配对，正式评测应使用这种 |
+| 无 `text_case` 字段 | `roundrobin` | 退回循环取模 |
+| 有 `text_case` 但匹配不到 | `fallback` | 退回取模，说明 manifest 写错了 |
+
+**取模配对只保证「有文本输入」，不代表图文语义相关。** 当前 manifest 没有 `text_case` 字段，因此跑出来的 `cross-color`（图文色系冲突）证据是随机组合的产物，**不能用来证明图文交叉核验的能力**。正式评测前应在 manifest 里逐条显式配对，并用逐样本日志中的 `pairing=` 字段核对。
+
+---
+
 ## 三个评测维度
 
 ### 1. 图像级：内容是否被判为可疑（二分类）

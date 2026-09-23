@@ -1,6 +1,6 @@
 # `selftest.js`
 
-> 源文件 `selftest.js` · 语言 `javascript` · 7517 字节 · 149 行
+> 源文件 `selftest.js` · 语言 `javascript` · 7975 字节 · 153 行
 
 ```javascript
 /* ============================================================
@@ -39,9 +39,13 @@ function check(name, cond, extra) {
 const IMG_WARM = { dominant: [{ family: '橙', share: .40 }, { family: '棕', share: .28 }, { family: '白', share: .20 }] };
 const IMG_COLD = { dominant: [{ family: '蓝', share: .50 }, { family: '白', share: .30 }, { family: '青', share: .08 }] };
 
+/* CASES 的 expect 是「纯文本侧」预期档位，与 README 中 UI 端到端实测档位不同源：
+ * 本脚本跑不了图像取证（依赖 Canvas），证据只有文本 + 跨模态两路。
+ * 因此样本 B 在这里是「中风险」，而在页面上补完图像团块证据后是 57 分「高风险」。
+ * 两组数字都对，差别来自输入证据是否完整——不要拿这里的档位去校验页面结果。 */
 const CASES = [
   { name: '样本 A · AI 合成素材', idx: 0, img: IMG_WARM, expect: 'critical' },
-  { name: '样本 B · 拼接篡改', idx: 1, img: IMG_WARM, expect: 'medium' },
+  { name: '样本 B · 拼接篡改（仅文本侧）', idx: 1, img: IMG_WARM, expect: 'medium' },
   { name: '样本 C · 正常内容', idx: 2, img: IMG_COLD, expect: 'low' }
 ];
 

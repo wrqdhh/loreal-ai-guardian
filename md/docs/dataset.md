@@ -54,6 +54,7 @@ dataset/
 | `mask` | string? | 仅篡改类有，相对 `dataset/` 的 mask 路径 |
 | `region` | object? | 贴片/处理区域 `{x, y, w, h, shape, feather}` |
 | `source` / `donor` | string? | 素材溯源 |
+| `text_case` | string? | 配套文本样本的 id（对应 `text/text_set.json` 的 `cases[].id`）。显式指定后评测才会做真正的图文配对，缺省则退回循环取模，详见 [benchmark.md](benchmark.md) |
 | `note` | string? | 备注 |
 
 **标签语义**（写死在 manifest 里，避免后人误读）：

@@ -1,6 +1,6 @@
 # `engine.js`
 
-> 源文件 `engine.js` · 语言 `javascript` · 42099 字节 · 781 行
+> 源文件 `engine.js` · 语言 `javascript` · 42612 字节 · 786 行
 
 ```javascript
 /* ============================================================
@@ -439,9 +439,14 @@
         var vals2 = [], mean2 = 0;
         for (var yy = 0; yy < BS; yy++) for (var xx = 0; xx < BS; xx++) { var vv = gsmall[(by2 * BS + yy) * CM + bx2 * BS + xx]; vals2.push(vv); mean2 += vv; }
         mean2 /= vals2.length;
-        var varr = 0; for (var vi = 0; varr === 0 && vi < vals2.length; vi++) { var dd = vals2[vi] - mean2; varr += dd * dd; }
+        var varr = 0; for (var vi = 0; vi < vals2.length; vi++) { var dd = vals2[vi] - mean2; varr += dd * dd; }
         varr /= vals2.length;
-        if (varr < 2500) continue;   // 过滤平坦区域，显著降低误报
+        // 过滤平坦区域：只让块内标准差 ≥20（方差 ≥400）的块参与匹配。
+        // 阈值按 128×128 归一化尺度实测标定：这批样本块方差中位数约 61、p90 约 112，
+        // 取 100 时 12 张里有 9 张误报（周期纹理被当成复制痕迹），取 900 则仅剩 5~7 个候选块、
+        // 检出能力过弱；400 在零误报的前提下保留约 5% 的候选块，是当前工作点。
+        // 早期版本取 2500，实测无一块能通过——检测器形同虚设。换数据分布需重新标定。
+        if (varr < 400) continue;
         var bits = '';
         for (var ty = 0; ty < BS; ty++) for (var tx = 0; tx < BS - 1; tx++) {
           bits += gsmall[(by2 * BS + ty) * CM + bx2 * BS + tx] < gsmall[(by2 * BS + ty) * CM + bx2 * BS + tx + 1] ? '1' : '0';
