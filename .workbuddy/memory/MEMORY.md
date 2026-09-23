@@ -37,3 +37,15 @@
 - 异常块几何过滤：填充率 ≥ 0.45、面积占比 ≤ 32%。
 - 噪声检测平坦度掩膜：局部梯度 ≤ 全图中位 × 2.2。
 - 定级：≥70 极高 / ≥48 高 / ≥26 中 / <26 低。
+
+## 发布链路（2026-09-23 确认）
+
+- 远端仓库：`https://github.com/wrqdhh/loreal-ai-guardian`（public，默认分支 `main`）。
+- GitHub Pages 从 **main 分支根目录**部署（无 `.github/workflows`），站点
+  `https://wrqdhh.github.io/loreal-ai-guardian/`。push 后自动重建，约 1~3 分钟生效。
+- 校验线上是否已生效：比对字节数
+  `wc -c < 本地文件` vs `curl -s "https://wrqdhh.github.io/loreal-ai-guardian/<file>" | wc -c`；
+  或用 `curl -s .../engine.js | grep -n varr` 看关键行。
+  **注意别 grep `2500`**——那是注释里提的「早期版本取值」，会误判成未更新。
+- 用户嫌 VSCode 提交慢，改用 PowerShell 走 git 命令；中文 commit message 用
+  `git -c i18n.commitEncoding=UTF-8 -c i18n.logOutputEncoding=UTF-8 commit -m "..."` 防乱码。
