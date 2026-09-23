@@ -12,3 +12,6 @@ Thumbs.db
 # 依赖与构建产物（本项目当前无依赖，为后续扩展预留）
 node_modules/
 dist/
+
+# WorkBuddy 工作记忆
+.workbuddy/
