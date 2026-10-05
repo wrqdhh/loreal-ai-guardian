@@ -44,6 +44,9 @@
     $('txt').value = ''; $('cmt').value = '';
     $('output').hidden = true; $('output').innerHTML = '';
     $('placeholder').hidden = false;
+    renderCover(null);
+    var al = $('askLog');
+    if (al) al.innerHTML = '';
     $('btnRun').textContent = '开始核验';
     var sb = document.querySelectorAll('#samples button');
     for (var i = 0; i < sb.length; i++) sb[i].classList.remove('on');
@@ -370,6 +373,295 @@
       '</div>';
   }
 
+  /* ---------------- 检测覆盖矩阵 ----------------
+   * 证据表只回答「发现了什么」。这里补上另一半：本次跑了哪些维度、
+   * 哪些已查未发现、哪些因缺少输入而没有运行。未命中同样是有价值的结论——
+   * 它说明该维度的造假特征未被检出，而不是没有检查。 */
+  var CHECKS = [
+    { cat: 'image', name: 'ELA 重压缩差分', ids: ['ela-hotspot', 'ela-cold'], miss: '局部编辑痕迹' },
+    { cat: 'image', name: '噪声一致性', ids: ['noise-high', 'noise-low', 'noise-absent'], miss: '噪声断层' },
+    { cat: 'image', name: '色度/亮度噪声比', ids: ['chroma-flat'], miss: '色度噪声缺失' },
+    { cat: 'image', name: '直方图量化痕迹', ids: ['hist-quant'], miss: '后处理痕迹' },
+    { cat: 'image', name: '复制-移动粗检', ids: ['copy-move'], miss: '重复区块' },
+    // ids 需与 engine.js / agent.js 中实际 push 的证据 id 保持一致；新增检测器时同步此处。
+    { cat: 'image', name: '生成规格画像', ids: ['gen-size'], miss: '生成规格特征' },
+    { cat: 'image', name: '元数据溯源', ids: ['meta-ai', 'meta-noexif'], miss: '生成工具残签' },
+    { cat: 'text', name: '文体生成倾向', ids: ['text-ai'], miss: '机器生成特征' },
+    { cat: 'text', name: '广告法合规', ids: ['text-adlaw'], miss: '违规表述' },
+    { cat: 'text', name: '评论区刷评', ids: ['text-shill'], miss: '刷评特征' },
+    { cat: 'cross', name: '图文一致性', ids: ['cross-color'], miss: '图文矛盾' }
+  ];
+
+  function coverRuns(c, hasImg, hasTxt) {
+    if (c.cat === 'cross') return hasImg && hasTxt;
+    if (c.cat === 'image') return hasImg;
+    return hasTxt;
+  }
+
+  function signalIndex(res) {
+    var by = {};
+    (res ? res.signals : []).forEach(function (s) {
+      if (!by[s.id] || s.severity > by[s.id].severity) by[s.id] = s;
+    });
+    return by;
+  }
+
+  function renderCover(res) {
+    var box = $('cover');
+    if (!box) return;
+    var by = signalIndex(res);
+    var hasImg = !!(res && res.image), hasTxt = !!(res && res.text);
+
+    var cells = CHECKS.map(function (c) {
+      var hits = c.ids.filter(function (id) { return by[id]; });
+      if (!coverRuns(c, hasImg, hasTxt)) {
+        return '<div class="cover-cell skip"><div class="st"></div><div><b>' + c.name +
+          '</b><em>未运行 · 未接入' + (c.cat === 'image' ? '图片' : c.cat === 'text' ? '文案' : '图文') + '</em></div></div>';
+      }
+      if (hits.length) {
+        var best = null, top = 0;
+        hits.forEach(function (id) {
+          var w = by[id].severity * by[id].confidence;
+          if (w > top) { top = w; best = by[id]; }
+        });
+        // 弱信号（如 EXIF 缺失）单独成档，避免与真正的造假证据视觉混同
+        var weak = top < 0.30;
+        var info = hits.length > 1
+          ? hits.length + ' 条证据 · ' + c.miss
+          : (best.metric ? best.metric.split(' · ')[0] : c.miss);
+        return '<div class="cover-cell ' + (weak ? 'warn' : 'hit') + '"><div class="st"></div><div><b>' + c.name +
+          '</b><em>' + (weak ? '弱信号 · ' : '') + esc(info) + '</em></div></div>';
+      }
+      return '<div class="cover-cell pass"><div class="st"></div><div><b>' + c.name +
+        '</b><em>已查 · 未检出' + esc(c.miss) + '</em></div></div>';
+    }).join('');
+
+    var run = CHECKS.filter(function (c) { return coverRuns(c, hasImg, hasTxt); });
+    var strong = 0, weak = 0;
+    run.forEach(function (c) {
+      var top = 0;
+      c.ids.forEach(function (id) { if (by[id]) top = Math.max(top, by[id].severity * by[id].confidence); });
+      if (top >= 0.30) strong++; else if (top > 0) weak++;
+    });
+    var sub = res
+      ? (strong + ' 项命中' + (weak ? ' · ' + weak + ' 项弱信号' : '') + ' · 共 ' + run.length + ' 项已运行')
+      : '等待核验';
+
+    box.innerHTML = '<div class="cover" id="cardCover">' +
+      '<h2 class="card-title"><span class="step-no">04</span>检测覆盖矩阵<span class="sub">' + sub + '</span></h2>' +
+      '<p class="cover-note">上面的证据表只回答「发现了什么」。这一节补上另一半：<b>本次到底跑了哪些维度、哪些已查未发现、哪些因为没有输入而没有运行</b>。' +
+      '未命中同样是有价值的结论——它说明该维度的造假特征未被检出，而不是没有检查。</p>' +
+      '<div class="cover-grid">' + cells + '</div></div>';
+  }
+
+  /* ---------------- 核验历史 ----------------
+   * 只留存结论摘要（分数 / 等级 / 证据 ID），不保存图片与原文。
+   * 存在本机 localStorage，不上传；隐私模式或配额超限时静默降级为不留存。 */
+  var HIST_KEY = 'tg_history_v1', HIST_MAX = 30;
+
+  function readHistory() {
+    try {
+      var arr = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+      return Object.prototype.toString.call(arr) === '[object Array]' ? arr : [];
+    } catch (e) { return []; }
+  }
+
+  function saveHistory(arr) {
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(arr.slice(0, HIST_MAX))); } catch (e) { /* 静默降级 */ }
+  }
+
+  function histLabel() {
+    if (state.imageName) return state.imageName;
+    var t = (state.text || '').trim().replace(/\s+/g, ' ');
+    if (t) return t.slice(0, 18) + (t.length > 18 ? '…' : '');
+    var n = (state.comments || '').split('\n').filter(function (s) { return s.trim(); }).length;
+    return '仅评论区 · ' + n + ' 条';
+  }
+
+  function pushHistory(res) {
+    if (window.__tgNoHist) return;
+    var arr = readHistory();
+    arr.unshift({
+      ts: Date.now(), label: histLabel(), score: res.aggregate.score,
+      level: res.level.label, color: res.level.color,
+      counts: res.aggregate.counts,
+      sigIds: res.signals.map(function (s) { return s.id; })
+    });
+    saveHistory(arr);
+    renderHistory();
+  }
+
+  function renderHistory() {
+    var box = $('history');
+    if (!box) return;
+    var arr = readHistory();
+    var items = arr.map(function (r, i) {
+      var prev = arr[i + 1];
+      var delta = !prev ? '首次核验'
+        : r.score === prev.score ? '与上次持平（' + prev.score + ' 分）'
+          : '较上次 ' + (r.score > prev.score ? '+' : '') + (r.score - prev.score);
+      var dt = new Date(r.ts);
+      var hh = ('0' + dt.getHours()).slice(-2) + ':' + ('0' + dt.getMinutes()).slice(-2);
+      return '<li title="本次命中的证据：' + esc((r.sigIds || []).join(', ') || '无') + '">' +
+        '<div class="hist-top"><b>' + esc(r.label) + '</b><em style="color:' + r.color + '">' + r.score + '</em></div>' +
+        '<div class="hist-meta">' + esc(r.level) + ' · 图像 ' + r.counts.image + ' / 文本 ' + r.counts.text +
+        ' / 跨模态 ' + r.counts.cross + ' · ' + hh + '</div>' +
+        '<div class="track"><i style="width:' + r.score + '%;background:' + r.color + '"></i></div>' +
+        '<div class="hist-delta">' + delta + '</div></li>';
+    }).join('');
+
+    box.innerHTML = '<div class="card" id="cardHistory">' +
+      '<h2 class="card-title"><span class="step-no">05</span>核验历史' +
+      '<span class="sub">' + (arr.length ? '共 ' + arr.length + ' 次' : '暂无记录') + '</span></h2>' +
+      '<p class="hist-note">只留存结论摘要（分数 / 等级 / 证据 ID），<b>不保存图片与原文</b>，全部留在本机浏览器，不上传。悬停任一条可查看该次命中的证据 ID。</p>' +
+      (items ? '<ul class="hist-list">' + items + '</ul>'
+        : '<div class="hist-empty">完成一次核验后，这里会留下可对比的记录。<br>多次核验之间能看出同一批素材的风险分布。</div>') +
+      (arr.length ? '<div class="hist-actions"><button class="btn ghost" id="btnHistClear" style="font-size:12px">清空历史</button></div>' : '') +
+      '</div>';
+
+    var hc = $('btnHistClear');
+    if (hc) hc.onclick = function () { saveHistory([]); renderHistory(); toast('核验历史已清空'); };
+  }
+
+  /* ---------------- 追问助手 ----------------
+   * 规则驱动：回答只用本次已经算出的证据，不联网、不臆测、不编造。
+   * 预留 window.TGModel 钩子——接入开源大模型后由模型接管自由问答，规则回答退化为断网兜底。 */
+  var ASK_ITEMS = [
+    { id: 'where', q: '可疑在哪里？' },
+    { id: 'text', q: '文案有什么问题？' },
+    { id: 'why', q: '为什么是这个等级？' },
+    { id: 'todo', q: '我该怎么做？' },
+    { id: 'pass', q: '哪些维度没查出问题？' },
+    { id: 'trust', q: '这个结论可靠吗？' }
+  ];
+
+  function answerOf(id, res) {
+    if (!res) return { html: '先完成一次核验，我就能基于本次证据回答。', src: '' };
+    var agg = res.aggregate, by = signalIndex(res);
+    var img = res.signals.filter(function (s) { return s.cat === 'image'; });
+    var txt = res.signals.filter(function (s) { return s.cat === 'text'; });
+    var listOf = function (arr) {
+      return '<ul>' + arr.map(function (s) {
+        return '<li>' + esc(s.label) + (s.metric ? '（' + esc(s.metric) + '）' : '') + '</li>';
+      }).join('') + '</ul>';
+    };
+    var srcOf = function (arr) { return 'source: ' + arr.map(function (s) { return s.id; }).join(', '); };
+
+    if (id === 'where') {
+      if (!res.image) return { html: '本次没有上传图片，图像侧未参与核验。', src: 'source: content_parser · 无图像输入' };
+      if (!img.length) return {
+        html: '图像侧 6 个检测维度<b>均未检出</b>形成证据的异常，说明没有发现拼接或生成特征。<br>' +
+          '这不等于图片一定为真——平台二次压缩会削弱 ELA 与噪声特征，重度美颜也会压低色度信号。',
+        src: 'source: forensics_pipeline · 证据 0 条'
+      };
+      return {
+        html: '图像侧检出 <b>' + img.length + ' 条</b>：' + listOf(img) +
+          '可疑区域已在上方图像卡中圈出，可切换「可疑区块 / 压缩残差 / 噪声异常」三种视图核对。',
+        src: srcOf(img)
+      };
+    }
+
+    if (id === 'text') {
+      if (!res.text) return { html: '本次没有填写正文或评论区，文本侧未参与核验。', src: 'source: content_parser · 无文本输入' };
+      if (!txt.length) return {
+        html: '文体统计与合规词表<b>均未命中</b>。文案在句长变化、真实细节密度、合规表述上未见异常。<br>' +
+          '需要说明：「生成倾向」是启发式判断，真人写的营销软文也可能带有生成感。',
+        src: 'source: text_pipeline · 证据 0 条'
+      };
+      return {
+        html: '文本侧检出 <b>' + txt.length + ' 条</b>：' + listOf(txt) +
+          '命中位置已在文本卡中逐处标注，鼠标悬停可看违规类型。',
+        src: srcOf(txt)
+      };
+    }
+
+    if (id === 'why') {
+      var top = res.signals.slice().sort(function (a, b) {
+        return b.severity * b.confidence - a.severity * a.confidence;
+      })[0];
+      return {
+        html: '综合分 <b>' + agg.score + '/100</b>，落在「' + esc(res.level.label) + '」档。三个维度贡献：图像 ' +
+          agg.parts.image + ' · 文本 ' + agg.parts.text + ' · 跨模态 ' + agg.parts.cross + '。<br>' +
+          (top ? '权重最高的一条是<b>' + esc(top.label) + '</b>（严重度 ' + top.severity.toFixed(2) +
+            ' × 置信度 ' + top.confidence.toFixed(2) + '）。' : '') +
+          '同类证据按 1−∏(1−s·c) 概率叠加而非简单求和，所以多条中等证据不会直接顶到满分；辅助证据权重折半，文体类启发式整体降权。',
+        src: 'source: evidence_fusion · 证据 ' + res.signals.length + ' 条' + (agg.corroborated ? ' · 已应用跨模态交叉印证' : '')
+      };
+    }
+
+    if (id === 'todo') {
+      if (!res.recommendation.actions.length) return { html: '当前无需处置动作。', src: 'source: decision_engine' };
+      return {
+        html: '处置等级：<b>' + esc(res.recommendation.urgency) + '</b><ul>' +
+          res.recommendation.actions.map(function (a) {
+            return '<li>' + esc(a.text) + '<span style="color:#8C8A82"> —— 触发证据：' + esc(a.from) + '</span></li>';
+          }).join('') + '</ul>每条建议都能追溯到触发它的证据 ID，可反向核对。',
+        src: 'source: decision_engine'
+      };
+    }
+
+    if (id === 'pass') {
+      var hasImg = !!res.image, hasTxt = !!res.text;
+      var pass = [], skip = [];
+      CHECKS.forEach(function (c) {
+        if (!coverRuns(c, hasImg, hasTxt)) { skip.push(c.name); return; }
+        if (!c.ids.some(function (x) { return by[x]; })) pass.push(c.name);
+      });
+      var h = '已查但未检出问题的维度共 <b>' + pass.length + ' 项</b>：' + (pass.length ? pass.join('、') : '（无）') + '。';
+      if (skip.length) h += '<br>另有 <b>' + skip.length + ' 项</b>未运行：' + skip.join('、') + ' —— 本次缺少对应输入。';
+      h += '<br>「未检出」只代表这些维度的造假特征没有被发现，不代表内容为真。';
+      return { html: h, src: 'source: 覆盖矩阵 · 已查 ' + pass.length + ' 项 / 未运行 ' + skip.length + ' 项' };
+    }
+
+    if (id === 'trust') {
+      var maxC = 0;
+      res.signals.forEach(function (s) { maxC = Math.max(maxC, s.confidence); });
+      return {
+        html: '本次共 <b>' + res.signals.length + ' 条</b>证据，最高单条置信度 <b>' + maxC.toFixed(2) + '</b>' +
+          (agg.corroborated ? '，并已出现跨模态交叉印证（图文两侧同时命中，可信度高于单侧）' : '') + '。<br>' +
+          '需要提醒：本工具是<b>取证级启发式检测，不是训练过的深度伪造分类器</b>，输出的是「可疑证据」而非「真伪判决」。' +
+          '平台转存会剥离 EXIF，重度美颜与滤镜会同时压低噪声与色度信号，因此存在误报与漏报。<br>' +
+          '高风险结论务必人工复核；低分也不等于放行，只是把人工抽检的范围缩小了。',
+        src: 'source: evidence_fusion + 能力边界声明'
+      };
+    }
+    return { html: '暂不支持这个问题。', src: '' };
+  }
+
+  function renderAsk() {
+    var box = $('ask');
+    if (!box || box.dataset.built) return;
+    box.dataset.built = '1';
+    box.innerHTML = '<div class="card" id="cardAsk">' +
+      '<h2 class="card-title"><span class="step-no">06</span>追问助手' +
+      '<span class="sub" id="askMode">规则驱动 · 全部本地计算</span></h2>' +
+      '<p class="hist-note">对结论有疑问就直接问。回答只用本次已经算出来的证据，<b>不联网、不臆测、不编造</b>，每条末尾都标出它读的是哪一步的输出。' +
+      '接入开源大模型后，这里升级为自由问答，规则回答退化为断网兜底。</p>' +
+      '<div class="ask-chips" id="askChips">' +
+      ASK_ITEMS.map(function (it) { return '<button data-ask="' + it.id + '">' + it.q + '</button>'; }).join('') +
+      '</div><div class="ask-log" id="askLog"></div></div>';
+
+    $('askChips').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-ask]');
+      if (b) askQuestion(b.dataset.ask, b.textContent);
+    });
+
+    if (window.TGModel && typeof window.TGModel.available === 'function') {
+      var m = $('askMode');
+      if (m) m.textContent = window.TGModel.available() ? '已接入模型 · 可自由问答' : '规则驱动 · 模型不可用';
+    }
+  }
+
+  function askQuestion(id, q) {
+    var log = $('askLog');
+    if (!log) return;
+    var a = answerOf(id, state.result);
+    log.insertAdjacentHTML('beforeend',
+      '<div class="ask-q">' + esc(q) + '</div>' +
+      '<div class="ask-a">' + a.html + (a.src ? '<div class="src">' + esc(a.src) + '</div>' : '') + '</div>');
+    log.lastElementChild.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
   /* ---------------- 方法学 ---------------- */
   function methodHTML() {
     return '<details class="method" id="methodBox">' +
@@ -455,6 +747,8 @@
     $('btnRun').disabled = true;
     $('btnRun').innerHTML = '<span class="spin"></span> 核验中';
     $('placeholder').hidden = true;
+    var askLog = $('askLog');
+    if (askLog) askLog.innerHTML = '';   // 上一轮的问答已随旧结论失效，清空
     var out = $('output');
     out.hidden = false;
     out.innerHTML = traceShell();
@@ -479,6 +773,8 @@
       state.overlay = 'suspect';
       drawOverlay();
       $('btnRun').textContent = '重新核验';
+      renderCover(res);
+      pushHistory(res);
       toast('核验完成 · ' + res.level.label + '（' + res.aggregate.score + '/100）');
       out.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
@@ -499,6 +795,7 @@
   });
 
   async function selfCheck() {
+    window.__tgNoHist = true;   // 自检不写入核验历史，避免污染真实记录
     var box = document.createElement('pre');
     box.id = 'selfcheck-output';
     box.style.cssText = 'position:absolute;left:-99999px;top:0';
@@ -530,6 +827,18 @@
             cvInfo = oc.width + 'x' + oc.height + ',painted=' + painted;
           } catch (e2) { cvInfo = 'read-failed'; }
         }
+        // 新增面板回归：卡片必须渲染，且追问助手每一条问题都要产出回答
+        if (!document.getElementById('cardHistory')) __errs.push('核验历史卡未渲染');
+        if (!document.getElementById('cardAsk')) __errs.push('追问助手卡未渲染');
+        var chips = document.querySelectorAll('#askChips button');
+        var answered = 0;
+        for (var ci = 0; ci < chips.length; ci++) {
+          var before = document.querySelectorAll('#askLog .ask-a').length;
+          chips[ci].click();
+          if (document.querySelectorAll('#askLog .ask-a').length > before) answered++;
+        }
+        if (answered !== chips.length) __errs.push('追问助手仅 ' + answered + '/' + chips.length + ' 条产出回答');
+
         lines.push('CASE=' + s.id +
           ' | SCORE=' + (sc ? sc.textContent : 'NA') +
           ' | VERDICT=' + (h2 ? h2.textContent : 'NA') +
@@ -594,6 +903,9 @@
     };
 
     updateIoHint();
+    renderCover(null);
+    renderHistory();
+    renderAsk();
 
     if (location.hash.indexOf('selfcheck') >= 0) { setTimeout(selfCheck, 60); return; }
 

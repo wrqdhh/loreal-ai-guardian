@@ -7,20 +7,20 @@
 
 生成方式：`node tools/to_markdown.js`（可重复执行，结果覆盖）
 
-统计：转换 15 个 · 原样复制 5 个 · 跳过 21 个
+统计：转换 15 个 · 原样复制 8 个 · 跳过 21 个
 
 | # | 源文件 | 转换后 | 语言 | 大小 | 行数 |
 |---:|---|---|---|---:|---:|
-| 1 | `.gitignore` | [`.gitignore.md`](.gitignore.md) | gitignore | 216 B | 15 |
+| 1 | `.gitignore` | [`.gitignore.md`](.gitignore.md) | gitignore | 255 B | 18 |
 | 2 | `agent.js` | [`agent.js.md`](agent.js.md) | javascript | 18791 B | 366 |
-| 3 | `app.js` | [`app.js.md`](app.js.md) | javascript | 31326 B | 615 |
+| 3 | `app.js` | [`app.js.md`](app.js.md) | javascript | 48458 B | 927 |
 | 4 | `benchmark.html` | [`benchmark.html.md`](benchmark.html.md) | html | 5176 B | 126 |
 | 5 | `benchmark.js` | [`benchmark.js.md`](benchmark.js.md) | javascript | 15227 B | 338 |
 | 6 | `dataset/manifest.json` | [`dataset/manifest.json.md`](dataset/manifest.json.md) | json | 4600 B | 187 |
 | 7 | `dataset/text/text_set.json` | [`dataset/text/text_set.json.md`](dataset/text/text_set.json.md) | json | 8123 B | 154 |
 | 8 | `engine.js` | [`engine.js.md`](engine.js.md) | javascript | 42612 B | 786 |
-| 9 | `index.html` | [`index.html.md`](index.html.md) | html | 15801 B | 305 |
-| 10 | `samples.js` | [`samples.js.md`](samples.js.md) | javascript | 11575 B | 282 |
+| 9 | `index.html` | [`index.html.md`](index.html.md) | html | 20579 B | 368 |
+| 10 | `samples.js` | [`samples.js.md`](samples.js.md) | javascript | 13125 B | 308 |
 | 11 | `selftest.js` | [`selftest.js.md`](selftest.js.md) | javascript | 7975 B | 153 |
 | 12 | `tools/make_splices.js` | [`tools/make_splices.js.md`](tools/make_splices.js.md) | javascript | 15279 B | 381 |
 | 13 | `tools/png.js` | [`tools/png.js.md`](tools/png.js.md) | javascript | 5746 B | 165 |
@@ -31,6 +31,9 @@
 
 | 文件 | 大小 | 行数 |
 |---|---:|---:|
+| [`.workbuddy/memory/2026-09-23.md`](.workbuddy/memory/2026-09-23.md) | 2289 B | 23 |
+| [`.workbuddy/memory/2026-10-05.md`](.workbuddy/memory/2026-10-05.md) | 2017 B | 32 |
+| [`.workbuddy/memory/MEMORY.md`](.workbuddy/memory/MEMORY.md) | 5058 B | 73 |
 | [`README.md`](README.md) | 13966 B | 273 |
 | [`dataset/README.md`](dataset/README.md) | 6359 B | 157 |
 | [`docs/benchmark.md`](docs/benchmark.md) | 5858 B | 138 |

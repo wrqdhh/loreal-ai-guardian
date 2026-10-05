@@ -1,6 +1,6 @@
 # `index.html`
 
-> 源文件 `index.html` · 语言 `html` · 15801 字节 · 305 行
+> 源文件 `index.html` · 语言 `html` · 20579 字节 · 368 行
 
 ```html
 <!DOCTYPE html>
@@ -39,9 +39,9 @@
   .brand{display:flex;align-items:center;gap:12px;flex:1;min-width:280px}
   .mark{
     width:38px;height:38px;border-radius:11px;flex:none;
-    background:linear-gradient(150deg,#6C63C9,#3F378F);color:#fff;
+    background:linear-gradient(150deg,#6C63C9,#3F378F);
     display:flex;align-items:center;justify-content:center;
-    font-size:17px;font-weight:500;letter-spacing:1px;
+    line-height:0;
   }
   .brand h1{font-size:16px;letter-spacing:.2px}
   .brand p{margin:1px 0 0;font-size:12px;color:var(--ink-3)}
@@ -218,6 +218,55 @@
   .tr-child .tr-head b{font-size:12.5px;font-weight:400;color:var(--ink-2)}
   .tr-child{padding-bottom:11px}
 
+  /* ---------- 检测覆盖矩阵 ---------- */
+  .cover{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-top:16px}
+  .cover-note{margin:0 0 14px;font-size:12.5px;color:var(--ink-2);line-height:1.72}
+  .cover-note b{font-weight:500;color:var(--ink)}
+  .cover-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(184px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden}
+  .cover-cell{background:#fff;padding:10px 12px;display:flex;gap:10px;align-items:flex-start}
+  .cover-cell .st{flex:none;width:16px;height:16px;border-radius:50%;margin-top:2px;border:1.5px solid var(--line-2);position:relative}
+  .cover-cell.hit .st{background:#E24B4A;border-color:#E24B4A}
+  .cover-cell.hit .st::after{content:"";position:absolute;left:3.5px;top:6.5px;width:6px;height:3px;border-left:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(-45deg)}
+  .cover-cell.pass .st{background:#EAF3DE;border-color:#97C459}
+  .cover-cell.pass .st::after{content:"";position:absolute;left:4.5px;top:2.5px;width:4px;height:7px;border-right:1.5px solid #3B6D11;border-bottom:1.5px solid #3B6D11;transform:rotate(45deg)}
+  .cover-cell.skip .st{background:#F4F3EF}
+  .cover-cell.warn .st{background:#FAEEDA;border-color:#EF9F27}
+  .cover-cell.warn .st::after{content:"!";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#854F0B;font:700 10px/1 sans-serif}
+  .cover-cell b{display:block;font-size:13px;font-weight:500;line-height:1.45}
+  .cover-cell em{display:block;font-style:normal;font-size:11.5px;margin-top:2px;font-family:var(--mono);word-break:break-all;line-height:1.5}
+  .cover-cell.hit em{color:#791F1F}
+  .cover-cell.pass em{color:#3B6D11}
+  .cover-cell.warn em{color:#633806}
+  .cover-cell.skip em{color:var(--ink-3)}
+
+  /* ---------- 核验历史 ---------- */
+  .hist-note{margin:0 0 12px;font-size:12px;color:var(--ink-3);line-height:1.68}
+  .hist-list{list-style:none;margin:0;padding:0;max-height:272px;overflow-y:auto}
+  .hist-list li{border:1px solid var(--line);border-radius:var(--r-s);padding:10px 12px;margin-bottom:8px;background:#FDFDFC;cursor:pointer;transition:.15s}
+  .hist-list li:last-child{margin-bottom:0}
+  .hist-list li:hover{border-color:var(--line-2);background:#fff}
+  .hist-list li.on{border-color:#8C84D6;background:#FAF9FE}
+  .hist-top{display:flex;align-items:baseline;gap:8px;font-size:12.5px}
+  .hist-top b{font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hist-top em{font:500 14px/1 var(--mono);font-style:normal;flex:none}
+  .hist-meta{margin:5px 0 7px;font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
+  .hist-delta{font-size:11.5px;color:var(--ink-3);margin-top:6px;font-family:var(--mono)}
+  .hist-empty{padding:20px;text-align:center;border:1px dashed var(--line-2);border-radius:var(--r-s);font-size:12.5px;color:var(--ink-3);line-height:1.7}
+  .hist-actions{margin-top:12px}
+
+  /* ---------- 追问助手 ---------- */
+  .ask-chips{display:flex;gap:7px;flex-wrap:wrap}
+  .ask-chips button{border:1px solid var(--line-2);background:#fff;border-radius:20px;padding:6px 13px;font-size:12.5px;color:var(--ink-2);transition:.15s}
+  .ask-chips button:hover{border-color:#8C84D6;color:#3F378F;background:#FAF9FE}
+  .ask-log{margin-top:14px}
+  .ask-log:empty{display:none}
+  .ask-q{font-size:12.5px;font-weight:500;color:#3F378F;padding:6px 12px;background:var(--accent-soft);border-radius:20px;margin:0 0 7px auto;width:fit-content;max-width:80%}
+  .ask-a{background:#F7F6F3;border:1px solid var(--line);border-radius:var(--r-s);padding:11px 13px;font-size:12.5px;line-height:1.75;color:var(--ink-2);margin-bottom:14px}
+  .ask-a b{font-weight:500;color:var(--ink)}
+  .ask-a ul{margin:6px 0 0;padding-left:17px}
+  .ask-a li{margin:3px 0}
+  .ask-a .src{margin-top:9px;padding-top:8px;border-top:1px dashed var(--line);font-size:11px;color:var(--ink-3);font-family:var(--mono);word-break:break-all}
+
   /* ---------- 方法学 ---------- */
   details.method{margin-top:16px;border:1px solid var(--line);border-radius:var(--r);background:var(--card)}
   details.method>summary{padding:14px 18px;cursor:pointer;font-size:13.5px;font-weight:500;list-style:none;display:flex;align-items:center;gap:8px}
@@ -245,7 +294,18 @@
 
 <header class="topbar">
   <div class="brand">
-    <div class="mark">核</div>
+    <div class="mark">
+      <svg viewBox="0 0 32 32" width="22" height="22" role="img" aria-label="TrustGuardian 熊猫守护标识">
+        <circle cx="9.2" cy="8.6" r="4.3" fill="#1E1B18"/>
+        <circle cx="22.8" cy="8.6" r="4.3" fill="#1E1B18"/>
+        <ellipse cx="16" cy="18.4" rx="10.4" ry="9.6" fill="#fff"/>
+        <ellipse cx="12" cy="17.2" rx="3.15" ry="3.75" fill="#1E1B18" transform="rotate(-14 12 17.2)"/>
+        <ellipse cx="20" cy="17.2" rx="3.15" ry="3.75" fill="#1E1B18" transform="rotate(14 20 17.2)"/>
+        <circle cx="12.5" cy="16.6" r="1.2" fill="#fff"/>
+        <circle cx="19.5" cy="16.6" r="1.2" fill="#fff"/>
+        <ellipse cx="16" cy="21.9" rx="1.95" ry="1.4" fill="#1E1B18"/>
+      </svg>
+    </div>
     <div>
       <h1>内容核验 Agent</h1>
       <p>赛题2 · 信任守护师 —— 从识别到决策的完整闭环</p>
@@ -284,6 +344,7 @@
         <textarea id="cmt" rows="5" placeholder="粘贴评论区内容，每行一条…"></textarea>
       </label>
     </div>
+    <div id="history"></div>
   </section>
 
   <section>
@@ -296,6 +357,8 @@
       <p style="margin-top:22px">没有素材？点右上角「载入示例」，三组对照样本会自动生成。</p>
     </div>
     <div id="output" hidden></div>
+    <div id="cover"></div>
+    <div id="ask"></div>
   </section>
 </div>
 
